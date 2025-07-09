@@ -10,6 +10,8 @@ add_subdirectory(src)
 
 # 添加 GoogleTest（注意 binary dir 必须显式指定）
 add_subdirectory(third_party/googletest ${CMAKE_BINARY_DIR}/googletest-build)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
 
 # 添加 tests 目录
 enable_testing()

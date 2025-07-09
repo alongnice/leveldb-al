@@ -1,3 +1,8 @@
 {
-    "Codegeex.RepoIndex": true
+    "Codegeex.RepoIndex": true,
+    "files.associations": {
+        "string": "cpp",
+        "cstring": "cpp",
+        "cassert": "cpp"
+    }
 }

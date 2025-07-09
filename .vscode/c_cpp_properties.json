@@ -4,11 +4,17 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/include/**"
+                "/usr/include",
+                "/usr/local/include",
+                "/usr/include/x86_64-linux-gnu",
+                "/usr/local/include/**",
+                "/usr/local/lib/**"
+
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/g++",
-            "cStandard": "c11",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++98",
             "intelliSenseMode": "linux-gcc-x64"
         }
     ],
