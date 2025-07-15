@@ -1,7 +1,15 @@
 #include <gtest/gtest.h>
-#include "leveldb/slice.h"
+#include "slice.h"
+#include "status.h"
 
-TEST(SliceTest, Create) {
-    leveldb::Slice s("hello", 5);
-    ASSERT_TRUE(true); // 占位
+using namespace leveldb;  // 添加这行
+
+// 集成测试或示例测试
+TEST(IntegrationTest, BasicUsage) {
+    // 测试Slice和Status的基本配合使用
+    leveldb::Slice key("test_key");
+    leveldb::Status status = leveldb::Status::OK();
+    
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(key.size(), 8);
 }

@@ -3,6 +3,8 @@
     "files.associations": {
         "string": "cpp",
         "cstring": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "cstdio": "cpp",
+        "cstdint": "cpp"
     }
 }

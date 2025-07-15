@@ -1,6 +1,7 @@
 # 列出实际存在的源文件（暂时我们就放个占位）
 add_library(leveldb
     util/slice.cc
+    util/status.cc
 )
 
 target_include_directories(leveldb PUBLIC
