@@ -1,5 +1,7 @@
-> todo: status状态管理 comparator比较器 arena内存池 skiplist跳表
+> todo: arena内存池 skiplist跳表
 
+0.0.0-004
+    20250819: 完成比较器模块,提供比较器接口,方便后续的排序和查找
 0.0.0-003
     20250709: 完成状态管理,将为leveldb种提供统一的错误处理和状态返回机制
 
