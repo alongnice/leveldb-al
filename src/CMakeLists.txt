@@ -3,6 +3,7 @@ add_library(leveldb
     util/slice.cc
     util/status.cc
     util/comparator.cc
+    util/arena.cc
 )
 
 target_include_directories(leveldb PUBLIC

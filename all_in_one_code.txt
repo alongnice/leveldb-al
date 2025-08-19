@@ -1,0 +1,331 @@
+// ===== arena.h =====
+/**
+ * @file arena.h
+ * @author alongnice
+ * @brief 内存池, 用于管理内存分配和释放
+ *  几种的申请释放要对比系统调用陷入内核态的效率更高
+ * @version 0.1
+ * @date 2025-08-19
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
+
+#pragma once
+#include <atomic>
+#include <cassert>
+#include <cstdint>
+#include <cstddef>
+#include <vector>
+
+
+namespace leveldb {
+class Arena {
+public:
+    /**
+     * @brief 默认构造函数
+     */
+    Arena();
+    Arena(const Arena&) = delete; // 禁止拷贝构造
+    /**
+     * @brief 析构函数
+     * 
+     */
+    ~Arena();
+
+    /**
+     * @brief 申请内存快
+     * @param bytes 申请内存块大小
+     * @return char* 返回申请的内存块指针(? 大小在外部保存了?)
+     */
+    char* Allocate(size_t bytes);
+
+    /**
+     * @brief 强制使用malloc进行内存分配 保证返回的内存块地址是8字节对齐的
+     *  应该是存在一些问题无法断定malloc 分配的内存宽度一定是8个字节
+     * @param bytes 申请内存块大小
+     * @return char* 返回申请的内存块指针
+     */
+    char* AllocateAligned(size_t bytes);
+
+    /**
+     * @brief 返回内存块大小
+     * @return size_t 
+     */
+    size_t MemoryUsage() const {
+        return memory_usage_.load(std::memory_order_relaxed);
+    }
+
+private:
+    /**
+     * @brief 分配回退
+     * 
+     * @param bytes 
+     * @return char* 
+     */
+    char* AllocateFallback(size_t bytes);
+    /**
+     * @brief 分配新块
+     * 
+     * @param block_bytes 
+     * @return char* 
+     */
+    char* AllocateNewBlock(size_t block_bytes);
+
+    /**
+     * @brief 分配状态
+     */
+    char* alloc_ptr_;
+    size_t alloc_bytes_remaining_;
+
+    /**
+     * @brief 内存块数组
+     * 
+     */
+    std::vector<char*> blocks_;
+
+
+    /**
+     * @brief 内存块大小
+     * 
+     */
+    std::atomic<size_t> memory_usage_;
+
+};  // class Arena
+
+inline char* Arena::Allocate(size_t bytes){
+    // 判断参数是否合规
+    assert(bytes > 0);
+    // 尝试从当前分配块中分配内存
+    if(bytes <= alloc_bytes_remaining_) {
+        char* result = alloc_ptr_;
+        alloc_ptr_ += bytes;
+        alloc_bytes_remaining_ -= bytes;
+        memory_usage_.fetch_add(bytes, std::memory_order_relaxed);
+        return result;
+    } else {
+        // 分配新的内存块
+        return AllocateFallback(bytes);
+    }
+}
+
+}  // namespace leveldb
+
+/**
+ * 核心成员变量
+ * alloc_ptr_：当前可分配内存块的指针
+ * alloc_bytes_remaining_：当前块剩余可分配字节数
+ * blocks_：已分配内存块的指针数组
+ * memory_usage_：总内存使用量
+ * 
+ * 
+ * 基本流程
+ * 小内存申请（如 < kBlockSize/4）
+ * 优先从当前块分配（Allocate）
+ * 当前块空间不足时，AllocateFallback 分配新块（kBlockSize），并更新 alloc_ptr_ 和 alloc_bytes_remaining_
+ * 大内存申请（如 > kBlockSize/4）
+ * 直接分配一个独立的新块（AllocateNewBlock），避免浪费主块空间
+ * 
+ * 
+ * 增删改查说明
+ * 增（Allocate/AllocateAligned）：分配新内存，更新指针和剩余空间
+ * 删（~Arena）：析构时统一释放所有 blocks_ 指向的内存
+ * 改：无直接“改”操作，分配后由外部使用者管理
+ * 查（MemoryUsage）：查询当前内存池总分配量
+ * 
+ * 
+ * 对齐分配（AllocateAligned）
+ * 预留接口，后续可实现按 8 字节或更高对齐分配，保证特殊场景下的性能和正确性
+ * 总结：
+ * Arena  内存池通过预分配大块内存，减少系统调用，提升分配效率。小内存请求复用主块空间，大内存请求单独分配，析构时统一释放，适合高性能场景。
+ *
+ */
+
+/**
+ * 对比之前仿照 nginx 的内存池实现对比
+ * https://gist.github.com/alongnice/f50c4e8bce82a543870c995e87f65eb3
+ * 
+ * 区别在于 nginx 的内存池有更加复杂的引用计数 失败计数 链表管理 和监控接口 适合高并发场景
+ * Arena 则更加简洁,因为目前本身不需要复杂的内存管理机制
+ *
+ */\n// ===== arena.cc =====
+/**
+ * @file arena.cc
+ * @author alongnice
+ * @brief 
+ * @version 0.1
+ * @date 2025-08-19
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
+
+#include "../../include/leveldb/arena.h"
+
+namespace leveldb {
+
+static const int kBlockSize = 4096; // 每个内存块的大小
+
+Arena::Arena() 
+    : alloc_ptr_(nullptr), alloc_bytes_remaining_(0), memory_usage_(0) {}
+    // 初始化内存池
+
+Arena::~Arena(){
+    // 释放所有分配的内存块
+    for(size_t it = 0; it < blocks_.size(); ++it) {
+        delete[] blocks_[it];
+    }
+}
+
+char* Arena::AllocateFallback(size_t bytes) {
+    if (bytes>kBlockSize/4){
+        char* result = AllocateNewBlock(bytes);
+        return result;
+    }
+
+    alloc_ptr_ = AllocateNewBlock(kBlockSize);
+    alloc_bytes_remaining_ = kBlockSize;
+
+    char* result = alloc_ptr_;
+    alloc_ptr_ += bytes;
+    alloc_bytes_remaining_ -= bytes;
+    return result;
+}
+
+char* Arena::AllocateAligned(size_t bytes){
+    const int align = (sizeof(void*) > 8) ? sizeof(void*) : 8;
+    static_assert((align & (align - 1)) == 0, "Alignment must be a power of 2");
+
+    size_t current_mod = reinterpret_cast<uintptr_t>(alloc_ptr_) & (align-1);
+    size_t slop = (current_mod == 0) ? 0 : align - current_mod;
+    size_t needed = bytes + slop;
+
+    char* result;
+    if(needed <= alloc_bytes_remaining_) {
+        result = alloc_ptr_ + slop;
+        alloc_ptr_ += needed;
+        alloc_bytes_remaining_ -= needed;
+    }else result = AllocateFallback(bytes);
+    assert((reinterpret_cast<uintptr_t>(result) & (align - 1)) == 0);
+    return result;
+}
+
+char* Arena::AllocateNewBlock(size_t block_bytes) {
+    char* result = new char[block_bytes];
+    blocks_.push_back(result);
+    memory_usage_.fetch_add(block_bytes + sizeof(char*),std::memory_order_relaxed);
+
+    return result;
+}
+
+
+}   // namespace leveldb\n// ===== random.h =====
+/**
+ * @file random.h
+ * @author alongnice
+ * @brief 
+ * @version 0.1
+ * @date 2025-08-19
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
+
+#include <cstdint>
+namespace leveldb {
+class Random{
+
+private:
+    uint32_t seed_;
+public:
+    explicit Random(uint32_t s): seed_(s & 0x7fffffffu){
+        if(seed_ == 0 || seed_ == 2147483647L) seed_ = 1;
+    }
+
+    uint32_t Next(){
+        static const uint32_t M = 2147483647L; // 2^31 - 1
+        static const uint64_t A = 16807;        // bits 14 8 7 5 2 1 0(斐波那契)
+
+        uint64_t product= seed_* A;
+        seed_ = static_cast<uint32_t>((product>>31)+(product & M));
+        if(seed_ > M) seed_ -= M;
+        return seed_;
+    }
+
+    uint32_t Uniform(int n){return Next() % n;}
+
+    bool OneIn(int n){return (Next() % n) == 0;}
+
+    uint32_t Skewed(int max_log){
+        return Uniform(1 << Uniform(max_log + 1));
+    }
+};  // class Random
+}   // namespace leveldb
+
+/**
+ * seed_：随机数生成器的种子，初始化时确保非零
+ * 保证种子要在 1-2^31-2 的范围之内 也就是非负int类型的数目范围(不包含边界)
+ * 
+ * Next 是一个经典的线性同余随机数算法(Lehmer RNG) 参数选用Minimal Standard 
+ * 2^31-1 是模数 16807是个经典的质数
+ * 能保证在范围内循环 周期长
+ * >>31 &M 是2中快速取模的技巧避免慢速除法
+ * 
+ * Uniform 负责产生均匀分布的随机数
+ * 
+ * Oneln 负责产生指定概率的true
+ * 
+ * Skewed 在0-max_log之间选择一个基数
+ * 然后再 0-2^base-1 之间选择一个数
+ * 取更小的结果 模拟某些分布例如调表层数
+ * 
+ * 已知这个随机数生成去针对密码学不足够安全
+ * 但是针对跳表层数 是没有问题的经典高效
+ */\n// ===== arena_test.cc =====
+#include <gtest/gtest.h>
+
+#include "arena.h"
+#include "random.h"
+
+namespace leveldb {
+TEST(ArenaTest, Empty) { Arena arena;}
+
+TEST(ArentTest, Simple){
+    std::vector<std::pair<size_t, char*>> allocated;
+    Arena arena;
+    const int N = 1e5;
+    size_t bytes = 0;
+    Random rnd(301);
+    for(int i = 0; i < N; ++i){
+        size_t s;
+        if(i%(N/10)==0) s = i;
+        else {
+            s = rnd.OneIn(4000)?rnd.Uniform(6000):(rnd.OneIn(10)?rnd.Uniform(100):rnd.Uniform(20));
+        }
+
+        if(s==0) s = 1;
+        // 打印每次分配的字节数
+        if (s > 1024 || i % 1000 == 0) {
+            printf("alloc[%d]: %zu\n", i, s);
+        }
+        char* r;
+        if(rnd.OneIn(10)) r = arena.AllocateAligned(s);
+        else r = arena.Allocate(s);
+
+        for(size_t b = 0; b < s; ++b) r[b] = i % 256;
+        bytes += s;
+        allocated.emplace_back(std::make_pair(s,r));
+        // allocated.emplace_back(s,r);
+        ASSERT_GE(arena.MemoryUsage(), bytes);
+        if( i > N/10 ) ASSERT_LE(arena.MemoryUsage(), bytes * 1.5);
+    }
+    for(size_t i=0; i<allocated.size(); ++i){
+        size_t num_bytes = allocated[i].first;
+        const char* p = allocated[i].second;
+        for(size_t b = 0; b < num_bytes; ++b) {
+            ASSERT_EQ(p[b], i % 256) << "Error at index " << i << " byte " << b;
+        }
+    }
+}
+
+}
