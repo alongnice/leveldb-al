@@ -100,7 +100,7 @@ inline char* Arena::Allocate(size_t bytes){
         char* result = alloc_ptr_;
         alloc_ptr_ += bytes;
         alloc_bytes_remaining_ -= bytes;
-        memory_usage_.fetch_add(bytes, std::memory_order_relaxed);
+        // memory_usage_.fetch_add(bytes, std::memory_order_relaxed);
         return result;
     } else {
         // 分配新的内存块

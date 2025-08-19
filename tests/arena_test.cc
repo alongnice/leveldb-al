@@ -39,7 +39,7 @@ TEST(ArentTest, Simple){
         size_t num_bytes = allocated[i].first;
         const char* p = allocated[i].second;
         for(size_t b = 0; b < num_bytes; ++b) {
-            ASSERT_EQ(p[b], i % 256) << "Error at index " << i << " byte " << b;
+            ASSERT_EQ(int(p[b]) & 0xff, i % 256);
         }
     }
 }

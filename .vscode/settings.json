@@ -6,7 +6,9 @@
         "cassert": "cpp",
         "cstdio": "cpp",
         "cstdint": "cpp",
-        "compare": "cpp"
+        "compare": "cpp",
+        "deque": "cpp",
+        "vector": "cpp"
     },
     "workbench.colorCustomizations": {
         "activityBar.activeBackground": "#2f7c47",

@@ -41,31 +41,61 @@ char* Arena::AllocateFallback(size_t bytes) {
     return result;
 }
 
-char* Arena::AllocateAligned(size_t bytes){
+// char* Arena::AllocateAligned(size_t bytes){
+//     const int align = (sizeof(void*) > 8) ? sizeof(void*) : 8;
+//     static_assert((align & (align - 1)) == 0, "Alignment must be a power of 2");
+
+//     size_t current_mod = reinterpret_cast<uintptr_t>(alloc_ptr_) & (align-1);
+//     size_t slop = (current_mod == 0) ? 0 : align - current_mod;
+//     size_t needed = bytes + slop;
+
+//     char* result;
+//     if(needed <= alloc_bytes_remaining_) {
+//         result = alloc_ptr_ + slop;
+//         alloc_ptr_ += needed;
+//         alloc_bytes_remaining_ -= needed;
+//     }else result = AllocateFallback(bytes);
+//     assert((reinterpret_cast<uintptr_t>(result) & (align - 1)) == 0);
+//     return result;
+// }
+
+char* Arena::AllocateAligned(size_t bytes) {
     const int align = (sizeof(void*) > 8) ? sizeof(void*) : 8;
-    static_assert((align & (align - 1)) == 0, "Alignment must be a power of 2");
-
-    size_t current_mod = reinterpret_cast<uintptr_t>(alloc_ptr_) & (align-1);
-    size_t slop = (current_mod == 0) ? 0 : align - current_mod;
+    static_assert((align & (align - 1)) == 0, "Pointer size should be a power of 2");
+    size_t current_mod = reinterpret_cast<uintptr_t>(alloc_ptr_) & (align - 1);
+    size_t slop = (current_mod == 0 ? 0 : align - current_mod);
     size_t needed = bytes + slop;
-
     char* result;
-    if(needed <= alloc_bytes_remaining_) {
+    if (needed <= alloc_bytes_remaining_) {
         result = alloc_ptr_ + slop;
         alloc_ptr_ += needed;
         alloc_bytes_remaining_ -= needed;
-    }else result = AllocateFallback(bytes);
+    } else {
+        // AllocateFallback always returned aligned memory
+        result = AllocateFallback(bytes);
+    }
     assert((reinterpret_cast<uintptr_t>(result) & (align - 1)) == 0);
     return result;
 }
 
+// char* Arena::AllocateNewBlock(size_t block_bytes) {
+//     char* result = new char[block_bytes];
+//     blocks_.push_back(result);
+//     memory_usage_.fetch_add(block_bytes + sizeof(char*),std::memory_order_relaxed);
+//     // 不仅增加了分配快的大小 还增加了 char*的大小 这是管理开销
+//     // 但是测试时并未录入 没有考虑这个部分
+
+//     // 距离申请20字节 测试项增加20
+//     // 但是分配则是4096+sizeof(char*)
+
+//     return result;
+// }
+
 char* Arena::AllocateNewBlock(size_t block_bytes) {
     char* result = new char[block_bytes];
     blocks_.push_back(result);
-    memory_usage_.fetch_add(block_bytes + sizeof(char*),std::memory_order_relaxed);
-
+    memory_usage_.fetch_add(block_bytes + sizeof(char*), std::memory_order_relaxed);
     return result;
 }
-
 
 }   // namespace leveldb
