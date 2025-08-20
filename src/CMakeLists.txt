@@ -9,6 +9,7 @@ add_library(leveldb
 target_include_directories(leveldb PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/include/leveldb
+    ${CMAKE_SOURCE_DIR}/src/db
 )
 
 find_package(Threads REQUIRED)
